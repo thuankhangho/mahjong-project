@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Rules Mahjong Engine</title>
+    <style>
+        :root {
+            --felt-color: #1a4d2e;
+            --felt-dark: #0f301c;
+            --tile-bg: #fffdf5;
+            --tile-border: #d4c5a9;
+            --tile-back: #026670;
+            --accent-gold: #f4d03f;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #eee;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .game-container {
+            width: 1000px;
+            background: radial-gradient(circle, var(--felt-color) 40%, var(--felt-dark) 100%);
+            border: 16px solid #3d2314;
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8), inset 0 0 40px rgba(0,0,0,0.5);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Header & Settings */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 12px 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .rule-selector select {
+            background: #222;
+            color: var(--accent-gold);
+            font-size: 15px;
+            font-weight: bold;
+            padding: 8px 12px;
+            border: 1px solid var(--accent-gold);
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .game-info {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+        }
+        .info-pill {
+            background: rgba(255,255,255,0.1);
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        /* Board Area */
+        .board-center {
+            height: 220px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 12px;
+            border: 2px dashed rgba(255,255,255,0.15);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .dora-area {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            color: #ddd;
+        }
+
+        .river-area {
+            flex-grow: 1;
+            margin-top: 10px;
+        }
+        .river-title {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+        .river-tiles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        /* Tiles Styling */
+        .tile {
+            width: 44px;
+            height: 60px;
+            background: var(--tile-bg);
+            border: 1px solid var(--tile-border);
+            border-bottom: 4px solid #b8a686;
+            border-radius: 6px;
+            display: inline-flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 26px;
+            color: #111;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: all 0.15s ease;
+            position: relative;
+        }
+        .tile:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.4);
+            border-color: var(--accent-gold);
+        }
+        .tile.small {
+            width: 32px;
+            height: 44px;
+            font-size: 20px;
+            border-bottom-width: 2px;
+            cursor: default;
+        }
+        .tile.small:hover { transform: none; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+
+        .tile-sub {
+            font-size: 9px;
+            font-weight: bold;
+            color: #666;
+            line-height: 1;
+            margin-top: 2px;
+        }
+
+        /* Hand & Actions */
+        .player-hand-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 12px;
+        }
+
+        .hand-tiles {
+            display: flex;
+            gap: 6px;
+            align-items: flex-end;
+            min-height: 70px;
+        }
+
+        .drawn-tile {
+            margin-left: 15px;
+            position: relative;
+        }
+        .drawn-tile::before {
+            content: 'Bốc';
+            position: absolute;
+            top: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: var(--accent-gold);
+        }
+
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 5px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        button.btn {
+            background: #2a2a2a;
+            color: white;
+            border: 1px solid #444;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+        button.btn:hover:not(:disabled) {
+            background: #3a3a3a;
+            border-color: #888;
+        }
+        button.btn-special {
+            background: #b03a2e;
+            border-color: #e74c3c;
+        }
+        button.btn-special:hover:not(:disabled) {
+            background: #cb4335;
+        }
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Notification & Logs */
+        .log-box {
+            font-size: 12px;
+            color: #bbb;
+            background: rgba(0,0,0,0.5);
+            padding: 8px 12px;
+            border-radius: 6px;
+            max-height: 40px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <div class="header">
+        <div class="rule-selector">
+            <label for="ruleSet">Phiên bản: </label>
+            <select id="ruleSet" onchange="switchRuleset()">
+                <option value="riichi">🇯🇵 Nhật Bản (Riichi Mahjong)</option>
+                <option value="chinese">🇨🇳 Trung Quốc (Quốc Tiêu / Standard)</option>
+            </select>
+        </div>
+        <div class="game-info">
+            <div class="info-pill">Gió vòng: <strong id="roundWind">Đông (Ton)</strong></div>
+            <div class="info-pill">Cây còn lại: <strong id="wallCount">70</strong></div>
+            <div class="info-pill">Điểm: <strong id="playerScore">25,000</strong></div>
+        </div>
+    </div>
+
+    <div class="board-center">
+        <div class="dora-area" id="doraContainer">
+            <span>Dora Indicator:</span>
+            <div id="doraTiles" style="display: flex; gap: 4px;"></div>
+        </div>
+        <div class="river-area">
+            <div class="river-title">Sông bài (Bài đã đánh ra):</div>
+            <div class="river-tiles" id="riverTiles"></div>
+        </div>
+    </div>
+
+    <div class="log-box" id="gameLog">Trận đấu bắt đầu. Chúc bạn may mắn!</div>
+
+    <div class="player-hand-container">
+        <div class="hand-tiles" id="handContainer">
+            </div>
+
+        <div class="action-bar">
+            <div class="action-buttons">
+                <button class="btn" onclick="drawTile()" id="btnDraw">Bốc bài</button>
+                <button class="btn" onclick="sortHand()">Sắp xếp bài</button>
+                <button class="btn btn-special" id="btnRiichi" onclick="declareRiichi()" style="display: none;">Riichi!</button>
+                <button class="btn btn-special" id="btnHu" onclick="checkWin()">Tsumo / Ù (Hu)</button>
+            </div>
+            <button class="btn" onclick="initGame()">Ván mới</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- DỮ LIỆU QUÂN BÀI (Unicode Mahjong) ---
+    const TILE_DEFS = {
+        // Man (Vạn)
+        '1m': { symbol: '🀇', name: '1 Vạn', suit: 'm', val: 1 },
+        '2m': { symbol: '🀈', name: '2 Vạn', suit: 'm', val: 2 },
+        '3m': { symbol: '🀉', name: '3 Vạn', suit: 'm', val: 3 },
+        '4m': { symbol: '🀊', name: '4 Vạn', suit: 'm', val: 4 },
+        '5m': { symbol: '🀋', name: '5 Vạn', suit: 'm', val: 5 },
+        '6m': { symbol: '🀌', name: '6 Vạn', suit: 'm', val: 6 },
+        '7m': { symbol: '🀍', name: '7 Vạn', suit: 'm', val: 7 },
+        '8m': { symbol: '🀎', name: '8 Vạn', suit: 'm', val: 8 },
+        '9m': { symbol: '🀏', name: '9 Vạn', suit: 'm', val: 9 },
+        // Pin (Sách / Đồng)
+        '1p': { symbol: '🀙', name: '1 Sách', suit: 'p', val: 1 },
+        '2p': { symbol: '🀚', name: '2 Sách', suit: 'p', val: 2 },
+        '3p': { symbol: '🀛', name: '3 Sách', suit: 'p', val: 3 },
+        '4p': { symbol: '🀜', name: '4 Sách', suit: 'p', val: 4 },
+        '5p': { symbol: '🀝', name: '5 Sách', suit: 'p', val: 5 },
+        '6p': { symbol: '🀞', name: '6 Sách', suit: 'p', val: 6 },
+        '7p': { symbol: '🀟', name: '7 Sách', suit: 'p', val: 7 },
+        '8p': { symbol: '🀠', name: '8 Sách', suit: 'p', val: 8 },
+        '9p': { symbol: '🀡', name: '9 Sách', suit: 'p', val: 9 },
+        // Sou (Tử / Ống)
+        '1s': { symbol: '🀐', name: '1 Tử', suit: 's', val: 1 },
+        '2s': { symbol: '🀑', name: '2 Tử', suit: 's', val: 2 },
+        '3s': { symbol: '🀒', name: '3 Tử', suit: 's', val: 3 },
+        '4s': { symbol: '🀓', name: '4 Tử', suit: 's', val: 4 },
+        '5s': { symbol: '🀔', name: '5 Tử', suit: 's', val: 5 },
+        '6s': { symbol: '🀕', name: '6 Tử', suit: 's', val: 6 },
+        '7s': { symbol: '🀖', name: '7 Tử', suit: 's', val: 7 },
+        '8s': { symbol: '🀗', name: '8 Tử', suit: 's', val: 8 },
+        '9s': { symbol: '🀘', name: '9 Tử', suit: 's', val: 9 },
+        // Honors (Gió & Rồng)
+        '1z': { symbol: '🀀', name: 'Đông', suit: 'z', val: 1 },
+        '2z': { symbol: '🀁', name: 'Nam', suit: 'z', val: 2 },
+        '3z': { symbol: '🀂', name: 'Tây', suit: 'z', val: 3 },
+        '4z': { symbol: '🀃', name: 'Bắc', suit: 'z', val: 4 },
+        '5z': { symbol: '🀆', name: 'Bạch', suit: 'z', val: 5 },
+        '6z': { symbol: '🀅', name: 'Phát', suit: 'z', val: 6 },
+        '7z': { symbol: '🀄', name: 'Trung', suit: 'z', val: 7 }
+    };
+
+    // State của ván đấu
+    let currentRule = 'riichi';
+    let wall = [];
+    let hand = [];
+    let drawnTileObj = null;
+    let river = [];
+    let dora = [];
+    let isRiichi = false;
+
+    // Khởi tạo Game
+    function initGame() {
+        isRiichi = false;
+        river = [];
+        dora = [];
+        drawnTileObj = null;
+
+        buildDeck();
+        dealInitialCards();
+        updateUI();
+        log(`Đã bắt đầu ván mới theo luật: ${currentRule === 'riichi' ? 'Nhật Bản (Riichi)' : 'Trung Quốc (Quốc Tiêu)'}`);
+    }
+
+    // Tạo bộ bài (Deck)
+    function buildDeck() {
+        wall = [];
+        const tileKeys = Object.keys(TILE_DEFS);
+        // Mỗi quân bài có 4 bản sao
+        tileKeys.forEach(key => {
+            for (let i = 0; i < 4; i++) {
+                wall.push(key);
+            }
+        });
+
+        // Xáo bài (Fisher-Yates Shuffle)
+        for (let i = wall.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [wall[i], wall[j]] = [wall[j], wall[i]];
+        }
+
+        // Nếu là Riichi, rút Dora Indicator
+        if (currentRule === 'riichi') {
+            dora = [wall.pop()];
+        }
+    }
+
+    // Chia bài ban đầu (13 cây)
+    function dealInitialCards() {
+        hand = [];
+        for (let i = 0; i < 13; i++) {
+            hand.push(wall.pop());
+        }
+        sortHandArray();
+    }
+
+    // Bốc bài
+    function drawTile() {
+        if (drawnTileObj !== null) {
+            log("Bạn đã bốc bài rồi, hãy đánh 1 quân ra sân!");
+            return;
+        }
+        if (wall.length === 0) {
+            log("Hết bài trong tường (Ryūkyoku / Hòa cờ)!");
+            return;
+        }
+
+        drawnTileObj = wall.pop();
+        updateUI();
+        log(`Bạn vừa bốc: ${TILE_DEFS[drawnTileObj].name}`);
+
+        // Riichi check demo
+        if (currentRule === 'riichi' && !isRiichi) {
+            document.getElementById('btnRiichi').style.display = 'inline-block';
+        }
+    }
+
+    // Đánh bài
+    function discardTile(index, isDrawn = false) {
+        let discarded;
+        if (isDrawn) {
+            discarded = drawnTileObj;
+            drawnTileObj = null;
+        } else {
+            discarded = hand.splice(index, 1)[0];
+            if (drawnTileObj !== null) {
+                hand.push(drawnTileObj);
+                drawnTileObj = null;
+                sortHandArray();
+            }
+        }
+
+        river.push(discarded);
+        log(`Bạn đã đánh cây: ${TILE_DEFS[discarded].name}`);
+        updateUI();
+    }
+
+    // Sắp xếp bài trên tay
+    function sortHandArray() {
+        const suitOrder = { 'm': 1, 'p': 2, 's': 3, 'z': 4 };
+        hand.sort((a, b) => {
+            if (TILE_DEFS[a].suit !== TILE_DEFS[b].suit) {
+                return suitOrder[TILE_DEFS[a].suit] - suitOrder[TILE_DEFS[b].suit];
+            }
+            return TILE_DEFS[a].val - TILE_DEFS[b].val;
+        });
+    }
+
+    function sortHand() {
+        sortHandArray();
+        updateUI();
+    }
+
+    // Chuyển đổi luật
+    function switchRuleset() {
+        currentRule = document.getElementById('ruleSet').value;
+        const doraContainer = document.getElementById('doraContainer');
+        const riichiBtn = document.getElementById('btnRiichi');
+
+        if (currentRule === 'riichi') {
+            doraContainer.style.display = 'flex';
+            document.getElementById('playerScore').innerText = "25,000";
+        } else {
+            doraContainer.style.display = 'none';
+            riichiBtn.style.display = 'none';
+            document.getElementById('playerScore').innerText = "0 Fan";
+        }
+        initGame();
+    }
+
+    // Tuyên bố Riichi (Riichi Mode)
+    function declareRiichi() {
+        if (isRiichi) return;
+        isRiichi = true;
+        log("📢 RIICHI!! Bạn đã cược 1,000 điểm và khóa tay bài!");
+        document.getElementById('btnRiichi').disabled = true;
+    }
+
+    // Kiểm tra Ù (Demo Logic)
+    function checkWin() {
+        const totalTiles = hand.length + (drawnTileObj ? 1 : 0);
+        if (totalTiles !== 14) {
+            log("Chưa đủ 14 cây bài để xét Ù!");
+            return;
+        }
+
+        if (currentRule === 'riichi') {
+            log("Kiểm tra Yaku: [Tsumo, Pinfu, Riichi] -> 3 Han 30 Fu (Ước tính)");
+        } else {
+            log("Kiểm tra Mạt chược TQ: [Thanh Nhất Sắc / Bình Hồ] -> 8 Fan (Ước tính)");
+        }
+    }
+
+    function log(msg) {
+        const logBox = document.getElementById('gameLog');
+        logBox.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    }
+
+    // Render HTML UI
+    function updateUI() {
+        document.getElementById('wallCount').innerText = wall.length;
+        
+        // Render River
+        const riverEl = document.getElementById('riverTiles');
+        riverEl.innerHTML = '';
+        river.forEach(key => {
+            const tile = TILE_DEFS[key];
+            riverEl.innerHTML += `<div class="tile small" title="${tile.name}">${tile.symbol}</div>`;
+        });
+
+        // Render Dora (nếu ở Riichi mode)
+        const doraEl = document.getElementById('doraTiles');
+        doraEl.innerHTML = '';
+        if (currentRule === 'riichi' && dora.length > 0) {
+            dora.forEach(key => {
+                const tile = TILE_DEFS[key];
+                doraEl.innerHTML += `<div class="tile small">${tile.symbol}</div>`;
+            });
+        }
+
+        // Render Hand
+        const handEl = document.getElementById('handContainer');
+        handEl.innerHTML = '';
+        hand.forEach((key, index) => {
+            const tile = TILE_DEFS[key];
+            handEl.innerHTML += `
+                <div class="tile" onclick="discardTile(${index})" title="${tile.name}">
+                    <span>${tile.symbol}</span>
+                    <span class="tile-sub">${tile.name}</span>
+                </div>
+            `;
+        });
+
+        // Render Quân vừa bốc (nếu có)
+        if (drawnTileObj) {
+            const tile = TILE_DEFS[drawnTileObj];
+            handEl.innerHTML += `
+                <div class="tile drawn-tile" onclick="discardTile(-1, true)" title="${tile.name}">
+                    <span>${tile.symbol}</span>
+                    <span class="tile-sub">${tile.name}</span>
+                </div>
+            `;
+        }
+    }
+
+    // Chạy ván đầu tiên
+    initGame();
+</script>
+</body>
+</html>

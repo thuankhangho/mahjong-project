@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mạt Chược Chuyên Nghiệp (Riichi & Quốc Tiêu)</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --table-felt: #114224;
+            --table-border: #2a1a10;
+            --tile-ivory: #fffdf5;
+            --tile-shadow: #b8a688;
+            --tile-border: #cebf9e;
+            --tile-back-grad: linear-gradient(135deg, #096874 0%, #033c44 100%);
+            --accent-gold: #f4d03f;
+            
+            /* Responsive Scaling */
+            --tile-w: clamp(34px, 3.8vw, 48px);
+            --tile-h: clamp(48px, 5.5vw, 68px);
+            --tile-sm-w: clamp(24px, 2.9vmin, 34px);
+            --tile-sm-h: clamp(33px, 4vmin, 47px);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background: #0c0d0e; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 10px; overflow-x: hidden; }
+
+        #app { width: 100%; max-width: 1160px; }
+        .card { background: #1a1c20; border: 1px solid #30363d; border-radius: 12px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
+
+        button.btn { background: #238636; color: white; border: 1px solid rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 13px; }
+        button.btn:hover:not(:disabled) { background: #2ea043; transform: translateY(-1px); }
+        button.btn-secondary { background: #30363d; }
+        button.btn-secondary:hover:not(:disabled) { background: #3c444d; }
+        button.btn-danger { background: #b62324; }
+        button.btn-danger:hover:not(:disabled) { background: #d73a49; }
+        button.btn:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(30%); }
+        button.btn:disabled:hover { transform: none; }
+        button.btn-call { background: #d97706; border-color: #f59e0b; color: #fff; font-size: 14px; padding: 10px 18px; }
+        button.btn-call:hover { background: #b45309; }
+
+        .room-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .room-table th, .room-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #282e33; font-size: 13px; }
+        .room-table th { background: #21262d; color: var(--accent-gold); }
+
+        /* ========================================================
+           BÀN ĐẤU MAHJONG SỬ DỤNG CSS GRID (CHỐNG ĐÈ HÌNH)
+           ======================================================== */
+        .mahjong-table {
+            position: relative;
+            width: 100%;
+            height: clamp(650px, 92vh, 900px);
+            background: radial-gradient(circle at center, #184b29 0%, #0c2b17 80%, #06190d 100%);
+            border: clamp(6px, 1.2vw, 16px) solid var(--table-border);
+            border-radius: 20px;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8), 0 15px 40px rgba(0,0,0,0.9);
+            
+            /* Chia lưới cố định: 3 cột x 3 hàng */
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+            grid-template-rows: auto minmax(0, 1fr) auto;
+            padding: 15px;
+            box-sizing: border-box;
+            gap: 10px;
+        }
+
+        /* KHU VỰC TRUNG TÂM (Nằm gọn ở ô 2,2 - Co giãn an toàn bằng vmin) */
+        .center-board {
+            grid-column: 2;
+            grid-row: 2;
+            width: max-content;
+            height: max-content;
+            max-width: 100%;
+            max-height: 100%;
+            align-self: center;
+            justify-self: center;
+            
+            background: rgba(0, 0, 0, 0.45);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            box-shadow: inset 0 0 25px rgba(0,0,0,0.6);
+            overflow: hidden;
+            
+            /* Lưới cho 4 Sông bài và Hub */
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+            grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+            padding: 8px;
+            gap: 6px;
+        }
+
+        /* HUB TRUNG TÂM */
+        .center-hub {
+            grid-column: 2;
+            grid-row: 2;
+            width: clamp(130px, 15.5vmin, 175px);
+            height: clamp(115px, 14vmin, 155px);
+            min-width: 110px;
+            min-height: 100px;
+            background: #111a14;
+            border: 2px solid #3c5240;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 3px;
+            color: #ddd;
+            font-size: clamp(11px, 1.3vmin, 13px);
+            align-self: center;
+            justify-self: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+            position: relative;
+            z-index: 2;
+        }
+        .hub-wind { font-size: clamp(15px, 1.7vmin, 19px); font-weight: bold; color: var(--accent-gold); }
+
+        /* SÔNG BÀI BÊN TRONG BẢNG TRUNG TÂM */
+        .river-grid {
+            display: grid;
+            background: rgba(0,0,0,0.25);
+            border: 1px dashed rgba(255,255,255,0.08);
+            border-radius: 6px;
+            padding: 3px;
+            gap: 2px;
+            align-content: center;
+            justify-content: center;
+            overflow: hidden;
+            min-width: 0;
+            min-height: 0;
+        }
+        .river-north { grid-column: 2; grid-row: 1; align-self: end; grid-template-columns: repeat(8, var(--tile-sm-w)); grid-auto-rows: var(--tile-sm-h); }
+        .river-south { grid-column: 2; grid-row: 3; align-self: start; grid-template-columns: repeat(8, var(--tile-sm-w)); grid-auto-rows: var(--tile-sm-h); }
+        .river-west  { grid-column: 1; grid-row: 2; justify-self: end; grid-template-columns: repeat(8, var(--tile-sm-w)); grid-auto-rows: var(--tile-sm-h); }
+        .river-east  { grid-column: 3; grid-row: 2; justify-self: start; grid-template-columns: repeat(8, var(--tile-sm-w)); grid-auto-rows: var(--tile-sm-h); }
+
+        /* CÁC GHẾ NGỒI VỆ TINH (GẮN VÀO CÁC Ô BIÊN CỦA GRID) */
+        .player-seat { display: flex; align-items: center; gap: 10px; z-index: 10; }
+        
+        .seat-top {
+            grid-column: 2;
+            grid-row: 1;
+            align-self: start;
+            justify-self: center;
+            flex-direction: column-reverse;
+        }
+        .seat-bottom {
+            grid-column: 1 / -1; /* Xoải full chiều ngang */
+            grid-row: 3;
+            align-self: end;
+            justify-self: center;
+            flex-direction: column;
+            padding-bottom: 5px; /* Giữ khoảng cách không bị cắt nút bấm */
+        }
+        .seat-left {
+            grid-column: 1;
+            grid-row: 2;
+            align-self: center;
+            justify-self: start;
+            flex-direction: row-reverse;
+        }
+        .seat-right {
+            grid-column: 3;
+            grid-row: 2;
+            align-self: center;
+            justify-self: end;
+            flex-direction: row;
+        }
+
+        .seat-badge {
+            background: rgba(0,0,0,0.85);
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: clamp(10px, 1.2vw, 13px);
+            text-align: center;
+        }
+        .seat-badge.active-turn { border-color: var(--accent-gold); box-shadow: 0 0 10px var(--accent-gold); }
+
+        /* QUÂN BÀI ÚP */
+        .tile-back-h { width: var(--tile-sm-w); height: var(--tile-sm-h); background: var(--tile-back-grad); border: 1px solid #207e8c; border-radius: 3px; border-bottom: 2px solid #04252a; }
+        .tile-back-v { width: var(--tile-sm-h); height: var(--tile-sm-w); background: var(--tile-back-grad); border: 1px solid #207e8c; border-radius: 3px; border-right: 2px solid #04252a; }
+        .opponent-hand-h { display: flex; gap: 2px; }
+        .opponent-hand-v { display: flex; flex-direction: column; gap: 2px; }
+
+        /* QUÂN BÀI MỞ VECTOR RESPONSIVE */
+        .tile {
+            width: var(--tile-w);
+            height: var(--tile-h);
+            background: var(--tile-ivory);
+            border: 1px solid var(--tile-border);
+            border-bottom: 3px solid var(--tile-shadow);
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 2px 1px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .tile:hover { transform: translateY(-6px); border-color: var(--accent-gold); box-shadow: 0 6px 14px rgba(0,0,0,0.5); }
+
+        .tile.small {
+            width: var(--tile-sm-w);
+            height: var(--tile-sm-h);
+            padding: 1px;
+            border-radius: 3px;
+            border-bottom-width: 2px;
+            cursor: pointer;
+        }
+        .tile.small:hover {
+            transform: scale(1.3) !important;
+            z-index: 50;
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 10px rgba(244, 208, 63, 1);
+        }
+        .tile.small .tile-sub { display: none; }
+
+        .tile-art { width: 100%; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .tile-art svg { width: 100%; height: 100%; display: block; }
+        .tile-sub { font-size: clamp(7.5px, 0.9vw, 9.5px); font-weight: 800; color: #3b3428; line-height: 1; margin-bottom: 1px; flex-shrink: 0; }
+
+        .melds-container { display: flex; gap: 4px; margin-left: 6px; }
+        .meld-set { display: flex; gap: 1px; background: rgba(0,0,0,0.4); padding: 2px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
+
+        /* OVERLAYS & TOOLTIP */
+        #tileTooltip {
+            position: fixed;
+            background: rgba(15, 20, 25, 0.95);
+            border: 1px solid var(--accent-gold);
+            border-radius: 6px;
+            padding: 5px 10px;
+            color: #fff;
+            font-size: 11px;
+            pointer-events: none;
+            z-index: 9999;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            display: none;
+            line-height: 1.3;
+        }
+        #tileTooltip strong { color: var(--accent-gold); font-size: 13px; }
+
+        .call-popup {
+            position: absolute;
+            bottom: clamp(140px, 20vh, 180px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(18, 22, 28, 0.95);
+            border: 2px solid var(--accent-gold);
+            border-radius: 10px;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 10px 35px rgba(0,0,0,0.8);
+            z-index: 100;
+        }
+
+        /* THÔNG BÁO GỌI BÀI (PON/KAN/CHI) - HIỆN GIỮA MÀN HÌNH CHO MỌI NGƯỜI */
+        .call-announcement {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(1);
+            background: rgba(15, 20, 15, 0.95);
+            border: 3px solid var(--accent-gold);
+            border-radius: 14px;
+            padding: 16px 32px;
+            font-size: clamp(16px, 2.4vmin, 24px);
+            font-weight: bold;
+            color: #fff;
+            text-align: center;
+            box-shadow: 0 0 40px rgba(244, 208, 63, 0.6), 0 15px 40px rgba(0,0,0,0.8);
+            z-index: 250;
+            display: none;
+            pointer-events: none;
+            animation: callPop 0.25s ease-out;
+        }
+        .call-announcement strong { color: var(--accent-gold); }
+        @keyframes callPop {
+            0% { transform: translate(-50%, -50%) scale(0.7); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        /* POPUP KẾT THÚC VÁN */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 500;
+        }
+        .modal-box {
+            background: #1a1c20;
+            border: 2px solid var(--accent-gold);
+            border-radius: 14px;
+            padding: 28px 32px;
+            max-width: 90vw;
+            width: 380px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+        }
+        .modal-box h2 { color: var(--accent-gold); font-size: 19px; margin-bottom: 14px; }
+        .modal-box p { color: #ddd; font-size: 14px; line-height: 1.5; margin-bottom: 22px; }
+        .modal-actions { display: flex; gap: 12px; justify-content: center; }
+        .modal-actions .btn { flex: 1; padding: 10px 14px; font-size: 14px; }
+
+        .my-hand-wrapper { display: flex; align-items: flex-end; max-width: 100%; overflow-x: auto; padding-bottom: 2px; }
+        .my-hand-container { display: flex; gap: 3px; align-items: flex-end; }
+        .my-controls { display: flex; gap: 10px; margin: 8px 0; justify-content: center; }
+        .log-overlay { position: absolute; top: 15px; left: 20px; background: rgba(0,0,0,0.7); border: 1px solid #333; padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #ddd; max-width: 280px; z-index: 15; }
+    </style>
+</head>
+<body>
+
+<div id="tileTooltip"></div>
+
+<div id="app">
+    <!-- VIEW 1: SẢNH CHỜ -->
+    <div id="lobbyView">
+        <div class="card">
+            <h1 style="color: var(--accent-gold); margin-bottom: 8px; font-size: clamp(20px, 3vw, 28px);">🀄 Đấu Trường Mạt Chược Đa Quy Tắc</h1>
+            <p style="color: #8b949e; margin-bottom: 16px; font-size: 13px;">Hỗ trợ 🇯🇵 Riichi Mahjong & 🇨🇳 Quốc Tiêu — Chơi đơn 1-3 Bot hoặc Online</p>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+                <button class="btn" onclick="openCreateModal(false)">➕ Tạo phòng Multiplayer</button>
+                <button class="btn btn-secondary" onclick="openCreateModal(true)">🤖 Chơi đơn với Bot (Singleplayer)</button>
+            </div>
+
+            <h3 style="color: #ddd; margin-bottom: 10px; font-size: 15px;">Danh sách phòng trực tuyến</h3>
+            <table class="room-table">
+                <thead>
+                    <tr>
+                        <th>Tên phòng</th>
+                        <th>Luật chơi</th>
+                        <th>Số người</th>
+                        <th>Trạng thái</th>
+                        <th>Bảo mật</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody id="roomListBody">
+                    <tr><td colspan="6" style="text-align: center; color: #777;">Đang tải danh sách phòng...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- VIEW 2: BÀN ĐẤU CHÍNH (SỬ DỤNG CSS GRID) -->
+    <div id="gameView" style="display: none; flex-direction: column; align-items: center; gap: 8px;">
+        <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 15px; font-weight: bold; color: var(--accent-gold);" id="roomTitle">Phòng đấu</div>
+            <button class="btn btn-danger" onclick="leaveRoom()">Rời bàn</button>
+        </div>
+
+        <div class="mahjong-table">
+            <div class="log-overlay" id="gameLog">Đang khởi tạo trận đấu...</div>
+
+            <!-- POPUP GỌI BÀI -->
+            <div class="call-popup" id="callPopup" style="display: none;">
+                <div style="font-weight: bold; color: var(--accent-gold); font-size: 14px;">Gọi bài:</div>
+                <div id="callActionBtns" style="display: flex; gap: 8px;"></div>
+                <button class="btn btn-secondary" onclick="sendCallDecision('pass')">Bỏ qua</button>
+            </div>
+
+            <!-- THÔNG BÁO PON/KAN/CHI GIỮA MÀN HÌNH (CHO MỌI NGƯỜI) -->
+            <div class="call-announcement" id="callAnnouncement"></div>
+
+            <!-- TRUNG TÂM BÀN ĐẤU -->
+            <div class="center-board">
+                <div class="river-grid river-north" id="river-2"></div>
+                <div class="river-grid river-west" id="river-3"></div>
+
+                <div class="center-hub">
+                    <div class="hub-wind" id="hubRound">Đông 1</div>
+                    <div>Còn lại: <strong id="hubTilesLeft" style="color:#fff;">70</strong> cây</div>
+                    <div style="margin-top:2px;">Dora:</div>
+                    <div id="hubDora" style="display: flex; gap: 2px;"></div>
+                </div>
+
+                <div class="river-grid river-east" id="river-1"></div>
+                <div class="river-grid river-south" id="river-0"></div>
+            </div>
+
+            <!-- ĐỐI DIỆN (BẮC) -->
+            <div class="player-seat seat-top" id="seat-north" style="display: none;">
+                <div class="seat-badge" id="badge-2">
+                    <div id="name-2">Bot Bắc</div>
+                    <div style="color: var(--accent-gold);" id="score-2">25,000</div>
+                </div>
+                <div style="display: flex; align-items: center;">
+                    <div class="opponent-hand-h" id="hand-north"></div>
+                    <div class="melds-container" id="melds-2"></div>
+                </div>
+            </div>
+
+            <!-- TRÁI (TÂY) -->
+            <div class="player-seat seat-left" id="seat-west" style="display: none;">
+                <div class="seat-badge" id="badge-3">
+                    <div id="name-3">Bot Tây</div>
+                    <div style="color: var(--accent-gold);" id="score-3">25,000</div>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <div class="opponent-hand-v" id="hand-west"></div>
+                    <div class="melds-container" id="melds-3" style="margin-top: 4px;"></div>
+                </div>
+            </div>
+
+            <!-- PHẢI (ĐÔNG) -->
+            <div class="player-seat seat-right" id="seat-east" style="display: none;">
+                <div class="seat-badge" id="badge-1">
+                    <div id="name-1">Bot Đông</div>
+                    <div style="color: var(--accent-gold);" id="score-1">25,000</div>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <div class="opponent-hand-v" id="hand-east"></div>
+                    <div class="melds-container" id="melds-1" style="margin-top: 4px;"></div>
+                </div>
+            </div>
+
+            <!-- BẠN (NAM) -->
+            <div class="player-seat seat-bottom">
+                <div class="my-hand-wrapper">
+                    <div class="my-hand-container" id="myHandArea"></div>
+                    <div class="melds-container" id="melds-0"></div>
+                </div>
+                <div class="my-controls">
+                    <button class="btn btn-secondary" onclick="sortHand(true)">Sắp xếp bài</button>
+                    <button class="btn btn-danger" id="tsumoBtn" onclick="checkWin()" disabled>Tsumo / Ù (Hu)</button>
+                </div>
+                <div class="seat-badge" id="badge-0">
+                    <span id="name-0">Bạn</span> | Điểm: <strong style="color: var(--accent-gold);" id="score-0">25,000</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- POPUP KẾT THÚC VÁN -->
+<div class="modal-overlay" id="gameOverModal">
+    <div class="modal-box">
+        <h2>🀄 Ván đấu kết thúc</h2>
+        <p id="gameOverReason">—</p>
+        <div class="modal-actions">
+            <button class="btn" onclick="handlePlayAgain()">🔄 Chơi lại</button>
+            <button class="btn btn-secondary" onclick="handleReturnHome()">🏠 Về trang chủ</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+    let currentRoomId = null;
+    let myHand = [];
+    let isAutoSort = true;
+    window.myMelds = [];
+
+    // =========================================================================
+    // HỆ THỐNG VẼ VECTOR SVG CHUẨN (VIEWBOX 50x70)
+    // =========================================================================
+    function getTileArtSVG(code) {
+        const val = parseInt(code[0]);
+        const suit = code[1];
+
+        if (suit === 'm') {
+            const KANJI = { 1:'一', 2:'二', 3:'三', 4:'四', 5:'五', 6:'六', 7:'七', 8:'八', 9:'九' };
+            const topColor = (val === 7 || val === 9) ? '#154194' : '#111';
+            return `
+                <svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet">
+                    <text x="25" y="27" font-size="24" font-weight="900" fill="${topColor}" text-anchor="middle" font-family="'Noto Serif SC', 'Songti SC', serif">${KANJI[val]}</text>
+                    <text x="25" y="55" font-size="26" font-weight="900" fill="#c92a2a" text-anchor="middle" font-family="'Noto Serif SC', 'Songti SC', serif">萬</text>
+                </svg>
+            `;
+        }
+
+        if (suit === 'p') {
+            const dot = (x, y, r, fill, ring='#111') => `
+                <circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${ring}" stroke-width="1.2" />
+                <circle cx="${x}" cy="${y}" r="${r*0.35}" fill="${ring}" />
+            `;
+            let inner = '';
+            if (val === 1) {
+                inner = `<circle cx="25" cy="35" r="18" fill="#c92a2a" stroke="#2b8a3e" stroke-width="3" stroke-dasharray="3 1.5"/>
+                         <circle cx="25" cy="35" r="7" fill="#2b8a3e" stroke="#111" stroke-width="1"/>
+                         <circle cx="25" cy="35" r="2.5" fill="#fff"/>`;
+            } else if (val === 2) {
+                inner = dot(25, 19, 9, '#2b8a3e') + dot(25, 51, 9, '#154194');
+            } else if (val === 3) {
+                inner = dot(14, 18, 7, '#154194') + dot(25, 35, 7, '#c92a2a') + dot(36, 52, 7, '#2b8a3e');
+            } else if (val === 4) {
+                inner = dot(16, 19, 7.5, '#154194') + dot(34, 19, 7.5, '#2b8a3e') +
+                        dot(16, 51, 7.5, '#2b8a3e') + dot(34, 51, 7.5, '#154194');
+            } else if (val === 5) {
+                inner = dot(14, 17, 6.5, '#154194') + dot(36, 17, 6.5, '#2b8a3e') +
+                        dot(25, 35, 7, '#c92a2a') +
+                        dot(14, 53, 6.5, '#2b8a3e') + dot(36, 53, 6.5, '#154194');
+            } else if (val === 6) {
+                inner = dot(16, 17, 6.5, '#2b8a3e') + dot(34, 17, 6.5, '#2b8a3e') +
+                        dot(16, 35, 6.5, '#c92a2a') + dot(34, 35, 6.5, '#c92a2a') +
+                        dot(16, 53, 6.5, '#c92a2a') + dot(34, 53, 6.5, '#c92a2a');
+            } else if (val === 7) {
+                inner = dot(13, 14, 5, '#2b8a3e') + dot(25, 21, 5, '#2b8a3e') + dot(37, 28, 5, '#2b8a3e') +
+                    dot(16, 43, 6, '#c92a2a') + dot(34, 43, 6, '#c92a2a') +
+                    dot(16, 57, 6, '#c92a2a') + dot(34, 57, 6, '#c92a2a');
+            } else if (val === 8) {
+                for (let r = 0; r < 4; r++) {
+                    inner += dot(16, 13 + r * 14.5, 5, '#154194') + dot(34, 13 + r * 14.5, 5, '#154194');
+                }
+            } else if (val === 9) {
+                for (let r = 0; r < 3; r++) {
+                    const color = r === 0 ? '#154194' : (r === 1 ? '#c92a2a' : '#2b8a3e');
+                    inner += dot(13, 16 + r * 19, 5.5, color) + 
+                             dot(25, 16 + r * 19, 5.5, color) + 
+                             dot(37, 16 + r * 19, 5.5, color);
+                }
+            }
+            return `<svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet">${inner}</svg>`;
+        }
+
+        if (suit === 's') {
+            const stick = (x, y, w, h, fill) => `
+                <rect x="${x - w/2}" y="${y}" width="${w}" height="${h}" rx="${w/2}" fill="${fill}" stroke="#111" stroke-width="0.9"/>
+                <line x1="${x - w/2}" y1="${y + h/2}" x2="${x + w/2}" y2="${y + h/2}" stroke="#fff" stroke-width="1.2"/>
+            `;
+            let inner = '';
+            if (val === 1) {
+                return `<svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet"><text x="25" y="48" font-size="36" text-anchor="middle">🦚</text></svg>`;
+            } else if (val === 2) {
+                inner = stick(25, 10, 7, 21, '#2b8a3e') + stick(25, 39, 7, 21, '#154194');
+            } else if (val === 3) {
+                inner = stick(25, 10, 6.5, 19, '#154194') + stick(15, 39, 6.5, 21, '#2b8a3e') + stick(35, 39, 6.5, 21, '#2b8a3e');
+            } else if (val === 4) {
+                inner = stick(15, 10, 6.5, 21, '#2b8a3e') + stick(35, 10, 6.5, 21, '#154194') +
+                        stick(15, 39, 6.5, 21, '#154194') + stick(35, 39, 6.5, 21, '#2b8a3e');
+            } else if (val === 5) {
+                inner = stick(14, 10, 5.5, 19, '#2b8a3e') + stick(36, 10, 5.5, 19, '#154194') +
+                        stick(25, 25, 6, 20, '#c92a2a') +
+                        stick(14, 41, 5.5, 19, '#154194') + stick(36, 41, 5.5, 19, '#2b8a3e');
+            } else if (val === 6) {
+                inner = stick(14, 10, 5.5, 20, '#2b8a3e') + stick(25, 10, 5.5, 20, '#2b8a3e') + stick(36, 10, 5.5, 20, '#2b8a3e') +
+                        stick(14, 39, 5.5, 21, '#154194') + stick(25, 39, 5.5, 21, '#154194') + stick(36, 39, 5.5, 21, '#154194');
+            } else if (val === 7) {
+                inner = stick(25, 8, 6, 15, '#c92a2a') +
+                        stick(14, 27, 5.5, 15, '#2b8a3e') + stick(36, 27, 5.5, 15, '#2b8a3e') +
+                        stick(11, 46, 5, 15, '#2b8a3e') + stick(20, 46, 5, 15, '#154194') + stick(30, 46, 5, 15, '#2b8a3e') + stick(39, 46, 5, 15, '#154194');
+            } else if (val === 8) {
+                for (let i = 0; i < 4; i++) {
+                    const x = 11 + i * 9.3;
+                    inner += stick(x, 10, 5, 20, '#2b8a3e');
+                    inner += stick(x, 39, 5, 20, '#154194');
+                }
+            } else if (val === 9) {
+                for (let r = 0; r < 3; r++) {
+                    const color = r === 0 ? '#154194' : (r === 1 ? '#c92a2a' : '#2b8a3e');
+                    const y = 9 + r * 19;
+                    inner += stick(13, y, 5.5, 14, color) + 
+                             stick(25, y, 5.5, 14, color) + 
+                             stick(37, y, 5.5, 14, color);
+                }
+            }
+            return `<svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet">${inner}</svg>`;
+        }
+
+        if (suit === 'z') {
+            if (code === '1z') return `<svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet"><text x="25" y="48" font-size="35" font-weight="bold" fill="#154194" text-anchor="middle" font-family="'Noto Serif SC', serif">東</text></svg>`;
+            if (code === '2z') return `<svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet"><text x="25" y="48" font-size="35" font-weight="bold" fill="#154194" text-anchor="middle" font-family="'Noto Serif SC', serif">南</text></svg>`;
+            if (code === '3z') return `<svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet"><text x="25" y="48" font-size="35" font-weight="bold" fill="#154194" text-anchor="middle" font-family="'Noto Serif SC', serif">西</text></svg>`;
+            if (code === '4z') return `<svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet"><text x="25" y="48" font-size="35" font-weight="bold" fill="#154194" text-anchor="middle" font-family="'Noto Serif SC', serif">北</text></svg>`;
+            if (code === '5z') {
+                return `
+                    <svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet">
+                        <rect x="8" y="9" width="34" height="52" rx="3" fill="none" stroke="#154194" stroke-width="4.5" stroke-dasharray="5 2.5"/>
+                        <rect x="12" y="13" width="26" height="44" rx="2" fill="none" stroke="#154194" stroke-width="1.8"/>
+                    </svg>
+                `;
+            }
+            if (code === '6z') return `<svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet"><text x="25" y="48" font-size="35" font-weight="900" fill="#2b8a3e" text-anchor="middle" font-family="'Noto Serif SC', serif">發</text></svg>`;
+            if (code === '7z') return `<svg viewBox="0 0 50 70" preserveAspectRatio="xMidYMid meet"><text x="25" y="48" font-size="35" font-weight="900" fill="#c92a2a" text-anchor="middle" font-family="'Noto Serif SC', serif">中</text></svg>`;
+        }
+        return '';
+    }
+
+    function getTileSubName(code) {
+        const val = code[0];
+        const suit = code[1];
+        if (suit === 'm') return `${val} Vạn`;
+        if (suit === 'p') return `${val} Sách`;
+        if (suit === 's') return `${val} Tử`;
+        if (code === '1z') return 'Đông';
+        if (code === '2z') return 'Nam';
+        if (code === '3z') return 'Tây';
+        if (code === '4z') return 'Bắc';
+        if (code === '5z') return 'Bạch';
+        if (code === '6z') return 'Phát';
+        if (code === '7z') return 'Trung';
+        return code;
+    }
+
+    // =========================================================================
+    // TOOLTIP HOVER THÔNG MINH
+    // =========================================================================
+    const tooltipEl = document.getElementById('tileTooltip');
+
+    function showTooltip(e, text, subInfo = "") {
+        tooltipEl.innerHTML = `<strong>${text}</strong>${subInfo ? `<br><span style="color:#aaa;font-size:10px;">${subInfo}</span>` : ''}`;
+        tooltipEl.style.display = 'block';
+        moveTooltip(e);
+    }
+
+    function moveTooltip(e) {
+        tooltipEl.style.left = (e.clientX + 12) + 'px';
+        tooltipEl.style.top = (e.clientY + 12) + 'px';
+    }
+
+    function hideTooltip() {
+        tooltipEl.style.display = 'none';
+    }
+
+    function createTileElement(code, isSmall = false, onClickHandler = null, extraInfo = "") {
+        const div = document.createElement('div');
+        div.className = `tile ${isSmall ? 'small' : ''}`;
+        const name = getTileSubName(code);
+        
+        div.innerHTML = `
+            <div class="tile-art">${getTileArtSVG(code)}</div>
+            <div class="tile-sub">${name}</div>
+        `;
+
+        div.onmouseenter = (e) => showTooltip(e, name, extraInfo);
+        div.onmousemove = (e) => moveTooltip(e);
+        div.onmouseleave = () => hideTooltip();
+
+        if (onClickHandler) div.onclick = onClickHandler;
+        return div;
+    }
+
+    // =========================================================================
+    // THUẬT TOÁN KIỂM TRA Ù CHÍNH XÁC (TSUMO VALIDATOR)
+    // =========================================================================
+    function checkSevenPairs(counts) {
+        let pairs = 0;
+        for (let code in counts) {
+            if (counts[code] === 2) pairs++;
+            else if (counts[code] !== 0) return false;
+        }
+        return pairs === 7;
+    }
+
+    function canFormMentsu(counts) {
+        let firstTile = null;
+        for (let code of Object.keys(counts).sort()) {
+            if (counts[code] > 0) {
+                firstTile = code;
+                break;
+            }
+        }
+        if (!firstTile) return true;
+
+        if (counts[firstTile] >= 3) {
+            counts[firstTile] -= 3;
+            if (canFormMentsu(counts)) return true;
+            counts[firstTile] += 3;
+        }
+
+        const val = parseInt(firstTile[0]);
+        const suit = firstTile[1];
+        if (suit !== 'z' && val <= 7) {
+            const t2 = `${val + 1}${suit}`;
+            const t3 = `${val + 2}${suit}`;
+            if (counts[t2] > 0 && counts[t3] > 0) {
+                counts[firstTile]--;
+                counts[t2]--;
+                counts[t3]--;
+                if (canFormMentsu(counts)) return true;
+                counts[firstTile]++;
+                counts[t2]++;
+                counts[t3]++;
+            }
+        }
+        return false;
+    }
+
+    function isWinningHand(handTiles, meldsCount = 0) {
+        if (handTiles.length + meldsCount * 3 !== 14) return false;
+
+        const counts = {};
+        handTiles.forEach(t => { counts[t] = (counts[t] || 0) + 1; });
+
+        if (meldsCount === 0 && checkSevenPairs(counts)) return true;
+
+        for (let tile in counts) {
+            if (counts[tile] >= 2) {
+                counts[tile] -= 2;
+                const countsCopy = { ...counts };
+                if (canFormMentsu(countsCopy)) return true;
+                counts[tile] += 2;
+            }
+        }
+        return false;
+    }
+
+    function checkWin() {
+        const meldsCount = window.myMelds ? window.myMelds.length : 0;
+        const totalTiles = myHand.length + meldsCount * 3;
+
+        // Nút đã bị disable khi chưa đủ điều kiện, nhưng vẫn kiểm tra lại cho chắc chắn.
+        if (totalTiles !== 14 || !isWinningHand([...myHand], meldsCount)) {
+            updateTsumoButtonState();
+            return;
+        }
+
+        socket.emit('player_declare_win', { roomId: currentRoomId, playerName: "Bạn" });
+    }
+
+    // =========================================================================
+    // XỬ LÝ LỰA CHỌN GỌI BÀI (PON, KAN, CHI)
+    // =========================================================================
+    socket.on('show_call_actions', ({ discardedTile, canPon, canKan, chiOptions }) => {
+        const popup = document.getElementById('callPopup');
+        const btnContainer = document.getElementById('callActionBtns');
+        btnContainer.innerHTML = '';
+
+        if (canPon) {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-call';
+            btn.innerText = '🔴 Pon (Phỗng)';
+            btn.onclick = () => sendCallDecision('pon');
+            btnContainer.appendChild(btn);
+        }
+
+        if (canKan) {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-call';
+            btn.innerText = '🟣 Kan (Cóng)';
+            btn.onclick = () => sendCallDecision('kan');
+            btnContainer.appendChild(btn);
+        }
+
+        if (chiOptions && chiOptions.length > 0) {
+            chiOptions.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-call';
+                btn.innerText = `🟡 Chi [${getTileSubName(opt[0])} - ${getTileSubName(opt[1])}]`;
+                btn.onclick = () => sendCallDecision('chi', { combination: opt });
+                btnContainer.appendChild(btn);
+            });
+        }
+
+        popup.style.display = 'flex';
+    });
+
+    function sendCallDecision(decision, details = {}) {
+        document.getElementById('callPopup').style.display = 'none';
+        socket.emit('player_call_decision', { roomId: currentRoomId, decision, details });
+    }
+
+    function sortHandArray() {
+        const order = { 'm': 1, 'p': 2, 's': 3, 'z': 4 };
+        myHand.sort((a, b) => {
+            if (a[1] !== b[1]) return order[a[1]] - order[b[1]];
+            return parseInt(a[0]) - parseInt(b[0]);
+        });
+    }
+
+    function sortHand(force = false) {
+        if (force) isAutoSort = true;
+        sortHandArray();
+        renderMyHand();
+    }
+
+    function renderMyHand() {
+        const container = document.getElementById('myHandArea');
+        container.innerHTML = '';
+        myHand.forEach((tileCode, idx) => {
+            const tileEl = createTileElement(tileCode, false, () => discard(tileCode, idx), "Bài trên tay của bạn");
+            container.appendChild(tileEl);
+        });
+        updateTsumoButtonState();
+    }
+
+    function updateTsumoButtonState() {
+        const btn = document.getElementById('tsumoBtn');
+        if (!btn) return;
+
+        const meldsCount = window.myMelds ? window.myMelds.length : 0;
+        const totalTiles = myHand.length + meldsCount * 3;
+        const canWin = totalTiles === 14 && isWinningHand([...myHand], meldsCount);
+
+        btn.disabled = !canWin;
+        btn.title = canWin
+            ? 'Bài đã đủ điều kiện Ù!'
+            : (totalTiles !== 14 ? `Cần đủ 14 quân (đang có ${totalTiles})` : 'Bài chưa tạo thành 4 bộ + 1 đôi hoặc 7 đôi');
+    }
+
+    function discard(tileCode, index) {
+        hideTooltip();
+        socket.emit('game_action', {
+            roomId: currentRoomId,
+            action: 'discard',
+            data: { tile: tileCode, tileIndex: index }
+        });
+        myHand.splice(index, 1);
+        if (isAutoSort) sortHandArray();
+        renderMyHand();
+    }
+
+    function renderMelds(seatIndex, melds) {
+        const container = document.getElementById(`melds-${seatIndex}`);
+        if (!container) return;
+        container.innerHTML = '';
+        if (!melds) return;
+
+        melds.forEach(m => {
+            const setDiv = document.createElement('div');
+            setDiv.className = 'meld-set';
+            
+            // Xếp tăng dần các quân bài trong Meld trước khi render
+            const order = { 'm': 1, 'p': 2, 's': 3, 'z': 4 };
+            const sortedTiles = [...m.tiles].sort((a, b) => {
+                if (a[1] !== b[1]) return order[a[1]] - order[b[1]];
+                return parseInt(a[0]) - parseInt(b[0]);
+            });
+
+            sortedTiles.forEach(t => setDiv.appendChild(createTileElement(t, true, null, `Đã gọi (${m.type.toUpperCase()})`)));
+            container.appendChild(setDiv);
+        });
+    }
+
+    // =========================================================================
+    // QUẢN LÝ PHÒNG & ĐỒNG BỘ TRẠNG THÁI GAME
+    // =========================================================================
+    socket.on('room_list', (rooms) => {
+        const tbody = document.getElementById('roomListBody');
+        tbody.innerHTML = '';
+        const publicRooms = rooms.filter(r => !r.isSinglePlayer);
+        if (publicRooms.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #777;">Chưa có phòng nào. Hãy tạo phòng mới!</td></tr>`;
+            return;
+        }
+
+        publicRooms.forEach(room => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${room.name}</strong></td>
+                <td>${room.ruleType === 'riichi' ? '🇯🇵 Riichi' : '🇨🇳 Quốc Tiêu'}</td>
+                <td>${room.playerCount}/${room.maxPlayers}</td>
+                <td>${room.status === 'playing' ? '<span style="color:#e74c3c;">🔴 Đang chơi</span>' : '<span style="color:#2ecc71;">🟢 Chờ</span>'}</td>
+                <td>${room.hasPassword ? '🔒 Có mật khẩu' : '🔓 Tự do'}</td>
+                <td>
+                    <button class="btn" onclick="joinRoomPrompt('${room.id}', ${room.hasPassword})" 
+                        ${room.playerCount >= room.maxPlayers || room.status === 'playing' ? 'disabled' : ''}>
+                        Vào chơi
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    });
+
+    let lastRoomConfig = null;
+
+    function openCreateModal(isSinglePlayer) {
+        const name = prompt("Nhập tên phòng:", isSinglePlayer ? "Đấu với Bot" : "Phòng Đại Chiến");
+        if (!name) return;
+
+        let password = null;
+        if (!isSinglePlayer) password = prompt("Đặt mật khẩu phòng (bỏ trống nếu không cần):", "");
+
+        const maxPlayers = prompt("Chọn số lượng người chơi (2, 3 hoặc 4):", "4");
+        if (!['2', '3', '4'].includes(maxPlayers)) return alert("Số người không hợp lệ!");
+
+        const ruleType = confirm("Bấm OK để chọn luật Nhật (Riichi), Cancel để chọn luật Trung Quốc:") ? 'riichi' : 'chinese';
+
+        const config = { name, password, maxPlayers: parseInt(maxPlayers), ruleType, isSinglePlayer };
+        lastRoomConfig = config;
+        socket.emit('create_room', config);
+    }
+
+    function joinRoomPrompt(roomId, hasPassword) {
+        let password = null;
+        if (hasPassword) {
+            password = prompt("Nhập mật khẩu phòng:");
+            if (!password) return;
+        }
+        lastRoomConfig = null; // phòng của người khác -> không có config để "chơi lại"
+        socket.emit('join_room', { roomId, password });
+    }
+
+    function goToLobby() {
+        currentRoomId = null;
+        document.getElementById('lobbyView').style.display = 'block';
+        document.getElementById('gameView').style.display = 'none';
+    }
+
+    function leaveRoom() {
+        if (confirm("Bạn có chắc muốn rời bàn đấu?")) {
+            socket.emit('leave_room', currentRoomId);
+            goToLobby();
+        }
+    }
+
+    function handlePlayAgain() {
+        document.getElementById('gameOverModal').style.display = 'none';
+        if (currentRoomId) socket.emit('leave_room', currentRoomId);
+
+        if (lastRoomConfig) {
+            socket.emit('create_room', lastRoomConfig);
+        } else {
+            goToLobby();
+        }
+    }
+
+    function handleReturnHome() {
+        document.getElementById('gameOverModal').style.display = 'none';
+        if (currentRoomId) socket.emit('leave_room', currentRoomId);
+        goToLobby();
+    }
+
+    socket.on('room_created', ({ roomId, room }) => setupGameView(roomId, room));
+    socket.on('player_joined', ({ room }) => setupGameView(room.id, room));
+
+    function setupGameView(roomId, room) {
+        currentRoomId = roomId;
+        document.getElementById('lobbyView').style.display = 'none';
+        document.getElementById('gameView').style.display = 'flex';
+        document.getElementById('roomTitle').innerText = `${room.name} (${room.ruleType.toUpperCase()})`;
+
+        document.getElementById('seat-east').style.display = room.maxPlayers >= 3 ? 'flex' : 'none';
+        document.getElementById('seat-north').style.display = room.maxPlayers >= 2 ? 'flex' : 'none';
+        document.getElementById('seat-west').style.display = room.maxPlayers === 4 ? 'flex' : 'none';
+    }
+
+    socket.on('game_started', ({ room }) => {
+        const me = room.players.find(p => p.id === socket.id);
+        if (me) myHand = me.hand;
+        sortHand(true);
+    });
+
+    socket.on('game_update', ({ gameState, players, log }) => {
+        document.getElementById('gameLog').innerText = log;
+        document.getElementById('hubTilesLeft').innerText = gameState.deckCount;
+        document.getElementById('hubRound').innerText = gameState.roundWind;
+
+        // Cập nhật Dora
+        const doraBox = document.getElementById('hubDora');
+        doraBox.innerHTML = '';
+        if (gameState.doraIndicators) {
+            gameState.doraIndicators.forEach(d => doraBox.appendChild(createTileElement(d, true, null, "Dora Indicator")));
+        }
+
+        // Cập nhật 4 Sông bài
+        for (let seat = 0; seat < 4; seat++) {
+            const riverEl = document.getElementById(`river-${seat}`);
+            if (riverEl) {
+                riverEl.innerHTML = '';
+                if (gameState.rivers && gameState.rivers[seat]) {
+                    gameState.rivers[seat].forEach(item => {
+                        const tileCode = typeof item === 'object' ? item.tile : item;
+                        const discarderName = typeof item === 'object' ? item.discarder : "";
+                        riverEl.appendChild(createTileElement(tileCode, true, null, `Người đánh: ${discarderName}`));
+                    });
+                }
+            }
+        }
+
+        // Cập nhật thông tin từng Người chơi
+        players.forEach(p => {
+            const seatIdx = p.seatIndex;
+            const badge = document.getElementById(`badge-${seatIdx}`);
+            const nameEl = document.getElementById(`name-${seatIdx}`);
+            const scoreEl = document.getElementById(`score-${seatIdx}`);
+
+            if (nameEl) nameEl.innerText = p.name;
+            if (scoreEl) scoreEl.innerText = p.score.toLocaleString();
+
+            if (badge) {
+                if (gameState.turnIndex === seatIdx) {
+                    badge.classList.add('active-turn');
+                } else {
+                    badge.classList.remove('active-turn');
+                }
+            }
+
+            renderMelds(seatIdx, p.melds);
+
+            if (p.id === socket.id) {
+                myHand = p.hand;
+                window.myMelds = p.melds || [];
+                if (isAutoSort) sortHandArray();
+                renderMyHand();
+            } else {
+                renderOpponentHiddenHand(seatIdx, p.handCount || 13);
+            }
+        });
+    });
+
+    function renderOpponentHiddenHand(seatIndex, count) {
+        if (seatIndex === 1) {
+            const el = document.getElementById('hand-east');
+            el.innerHTML = '';
+            for (let i = 0; i < count; i++) el.innerHTML += `<div class="tile-back-v"></div>`;
+        } else if (seatIndex === 2) {
+            const el = document.getElementById('hand-north');
+            el.innerHTML = '';
+            for (let i = 0; i < count; i++) el.innerHTML += `<div class="tile-back-h"></div>`;
+        } else if (seatIndex === 3) {
+            const el = document.getElementById('hand-west');
+            el.innerHTML = '';
+            for (let i = 0; i < count; i++) el.innerHTML += `<div class="tile-back-v"></div>`;
+        }
+    }
+
+    let callAnnounceTimeout = null;
+    socket.on('call_announcement', ({ playerName, type, label, tile }) => {
+        const el = document.getElementById('callAnnouncement');
+        if (!el) return;
+
+        const emoji = type === 'pon' ? '🔴' : type === 'kan' ? '🟣' : '🟡';
+        el.innerHTML = `${emoji} <strong>${playerName}</strong> đã gọi <strong>${label}</strong> — ${getTileSubName(tile)}!`;
+        el.style.display = 'block';
+        el.style.animation = 'none';
+        void el.offsetWidth; // ép trình duyệt chạy lại animation nếu 2 thông báo tới liên tiếp
+        el.style.animation = 'callPop 0.25s ease-out';
+
+        if (callAnnounceTimeout) clearTimeout(callAnnounceTimeout);
+        callAnnounceTimeout = setTimeout(() => { el.style.display = 'none'; }, 1800);
+    });
+
+    socket.on('error_msg', (msg) => alert(msg));
+
+    socket.on('game_over', ({ reason }) => {
+        document.getElementById('gameOverReason').innerText = reason;
+        document.getElementById('gameOverModal').style.display = 'flex';
+    });
+</script>
+</body>
+</html>
